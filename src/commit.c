@@ -509,28 +509,28 @@ int git_commit__parse(void *_commit, git_odb_object *odb_obj)
 	return git_commit__parse_ext(_commit, odb_obj, 0);
 }
 
-#define GIT_COMMIT_GETTER(_rvalue, _name, _return) \
+#define GIT_COMMIT_GETTER(_rvalue, _name, _return, _invalid) \
 	_rvalue git_commit_##_name(const git_commit *commit) \
 	{\
-		GIT_ASSERT_ARG(commit); \
+		GIT_ASSERT_ARG_EXT(commit, _invalid); \
 		return _return; \
 	}
 
-GIT_COMMIT_GETTER(const git_signature *, author, commit->author)
-GIT_COMMIT_GETTER(const git_signature *, committer, commit->committer)
-GIT_COMMIT_GETTER(const char *, message_raw, commit->raw_message)
-GIT_COMMIT_GETTER(const char *, message_encoding, commit->message_encoding)
-GIT_COMMIT_GETTER(const char *, raw_header, commit->raw_header)
-GIT_COMMIT_GETTER(git_time_t, time, commit->committer->when.time)
-GIT_COMMIT_GETTER(int, time_offset, commit->committer->when.offset)
-GIT_COMMIT_GETTER(unsigned int, parentcount, (unsigned int)git_array_size(commit->parent_ids))
-GIT_COMMIT_GETTER(const git_oid *, tree_id, &commit->tree_id)
+GIT_COMMIT_GETTER(const git_signature *, author, commit->author, NULL)
+GIT_COMMIT_GETTER(const git_signature *, committer, commit->committer, NULL)
+GIT_COMMIT_GETTER(const char *, message_raw, commit->raw_message, NULL)
+GIT_COMMIT_GETTER(const char *, message_encoding, commit->message_encoding, NULL)
+GIT_COMMIT_GETTER(const char *, raw_header, commit->raw_header, NULL)
+GIT_COMMIT_GETTER(git_time_t, time, commit->committer->when.time, INT64_MIN)
+GIT_COMMIT_GETTER(int, time_offset, commit->committer->when.offset, -1)
+GIT_COMMIT_GETTER(unsigned int, parentcount, (unsigned int)git_array_size(commit->parent_ids), 0)
+GIT_COMMIT_GETTER(const git_oid *, tree_id, &commit->tree_id, NULL)
 
 const char *git_commit_message(const git_commit *commit)
 {
 	const char *message;
 
-	GIT_ASSERT_ARG(commit);
+	GIT_ASSERT_ARG_EXT(commit, NULL);
 
 	message = commit->raw_message;
 
@@ -547,7 +547,7 @@ const char *git_commit_summary(git_commit *commit)
 	const char *msg, *space;
 	bool space_contains_newline = false;
 
-	GIT_ASSERT_ARG(commit);
+	GIT_ASSERT_ARG_EXT(commit, NULL);
 
 	if (!commit->summary) {
 		for (msg = git_commit_message(commit), space = NULL; *msg; ++msg) {
@@ -590,7 +590,7 @@ const char *git_commit_body(git_commit *commit)
 {
 	const char *msg, *end;
 
-	GIT_ASSERT_ARG(commit);
+	GIT_ASSERT_ARG_EXT(commit, NULL);
 
 	if (!commit->body) {
 		/* search for end of summary */
@@ -622,7 +622,7 @@ int git_commit_tree(git_tree **tree_out, const git_commit *commit)
 const git_oid *git_commit_parent_id(
 	const git_commit *commit, unsigned int n)
 {
-	GIT_ASSERT_ARG(commit);
+	GIT_ASSERT_ARG_EXT(commit, NULL);
 
 	return git_array_get(commit->parent_ids, n);
 }
@@ -863,7 +863,7 @@ int git_commit_create_buffer(git_buf *out,
 /**
  * Append to 'out' properly marking continuations when there's a newline in 'content'
  */
-static void format_header_field(git_buf *out, const char *field, const char *content)
+static int format_header_field(git_buf *out, const char *field, const char *content)
 {
 	const char *lf;
 
@@ -882,6 +882,8 @@ static void format_header_field(git_buf *out, const char *field, const char *con
 
 	git_buf_puts(out, content);
 	git_buf_putc(out, '\n');
+
+	return git_buf_oom(out) ? -1 : 0;
 }
 
 static const git_oid *commit_parent_from_commit(size_t n, void *payload)
@@ -932,7 +934,9 @@ int git_commit_create_with_signature(
 
 	if (signature != NULL) {
 		field = signature_field ? signature_field : "gpgsig";
-		format_header_field(&commit, field, signature);
+
+		if ((error = format_header_field(&commit, field, signature)) < 0)
+			goto cleanup;
 	}
 
 	git_buf_puts(&commit, header_end);
