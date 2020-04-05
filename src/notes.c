@@ -640,25 +640,25 @@ int git_note_default_ref(git_buf *out, git_repository *repo)
 
 const git_signature *git_note_committer(const git_note *note)
 {
-	GIT_ASSERT_ARG(note);
+	GIT_ASSERT_ARG_EXT(note, NULL);
 	return note->committer;
 }
 
 const git_signature *git_note_author(const git_note *note)
 {
-	GIT_ASSERT_ARG(note);
+	GIT_ASSERT_ARG_EXT(note, NULL);
 	return note->author;
 }
 
 const char *git_note_message(const git_note *note)
 {
-	GIT_ASSERT_ARG(note);
+	GIT_ASSERT_ARG_EXT(note, NULL);
 	return note->message;
 }
 
 const git_oid *git_note_id(const git_note *note)
 {
-	GIT_ASSERT_ARG(note);
+	GIT_ASSERT_ARG_EXT(note, NULL);
 	return &note->id;
 }
 
